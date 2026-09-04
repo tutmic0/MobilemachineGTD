@@ -34,8 +34,8 @@
  */
 var CONFIG = {
   GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
-  xHandle: "mobilemachineOS",
-  xPostUrl: "https://x.com/mobilemachineOS/status/2095853487946961219?s=20",
+  xHandle: "MobileMachines",
+  xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
   xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
@@ -198,10 +198,27 @@ async function beginXConnect() {
   var verifier = randomPkceString();
   var state_ = randomPkceString();
   var challenge = await pkceChallengeFor(verifier);
+
+  // Keep a local copy too (fast path when the return trip lands back in
+  // this exact same browser tab/context) --
   try {
     sessionStorage.setItem("mm_pkce_verifier", verifier);
     sessionStorage.setItem("mm_pkce_state", state_);
-  } catch (e) { /* private mode etc -- return trip just won't find them, handled below */ }
+  } catch (e) { /* private mode etc -- fine, the server-side stash below is what actually matters */ }
+
+  // ... but the real source of truth is this server-side stash, keyed by
+  // "state". On mobile, clicking Connect X very often hands off to a
+  // *different* browser/app context (the X app itself, or an in-app
+  // browser's own separate storage) than the one that receives X's
+  // redirect back -- sessionStorage from this tab wouldn't be visible
+  // there at all. "state" always comes back correctly in the redirect
+  // URL no matter which context receives it, so that's what we key on.
+  try {
+    await postAction("oauth_stash", { state: state_, verifier: verifier });
+  } catch (e) {
+    // If this fails (offline, etc.) we still try the login -- the local
+    // sessionStorage copy above is the fallback for the same-tab case.
+  }
 
   var url = "https://x.com/i/oauth2/authorize"
     + "?response_type=code"
@@ -233,22 +250,23 @@ async function consumeOAuthReturn() {
     return;
   }
 
-  var expectedState = null, verifier = null;
+  // Clean up whatever local copy this tab might have -- it's only ever a
+  // fast-path hint now, never required. The actual verifier lookup below
+  // happens server-side, keyed by "state", so this works even if X handed
+  // the login off to a different browser/app than the one that started it.
   try {
-    expectedState = sessionStorage.getItem("mm_pkce_state");
-    verifier = sessionStorage.getItem("mm_pkce_verifier");
     sessionStorage.removeItem("mm_pkce_state");
     sessionStorage.removeItem("mm_pkce_verifier");
   } catch (e) { /* ignore */ }
 
-  if (!verifier || !returnedState || returnedState !== expectedState) {
+  if (!returnedState) {
     el.connectError.textContent = CONNECT_ERROR_MESSAGES.expired_state;
     return;
   }
   if (!backendReady()) { setMsg("This page isn't connected to a backend yet -- see README.md.", "error"); return; }
 
   try {
-    var data = await postAction("oauth_exchange", { code: code, code_verifier: verifier });
+    var data = await postAction("oauth_exchange", { code: code, state: returnedState });
     if (data.ok && data.handle && data.token) {
       state.xHandle = data.handle;
       state.xToken = data.token;
