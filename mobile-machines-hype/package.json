@@ -1,0 +1,9 @@
+{
+  "name": "mobile-machines-hype",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mobile Machines spin-to-win site + API (Vercel Functions + Postgres).",
+  "dependencies": {
+    "pg": "^8.11.5"
+  }
+}
