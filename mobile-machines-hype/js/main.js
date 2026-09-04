@@ -33,7 +33,7 @@
  */
 var CONFIG = {
   xHandle: "mobilemachineOS",
-  xPostUrl: "https://x.com/mobilemachineOS/status/2095917604338631144?s=20",
+  xPostUrl: "https://x.com/mobilemachineOS/status/REPLACE_ME",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
   xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
@@ -126,6 +126,7 @@ var state = {
   spinsAvailable: 0,
   hasWon: false,
   claimed: false,
+  claimedAddress: "", // set once the backend confirms an address is on file for this win
   wheelRotation: 0,
   spinning: false,
   actionsDone: { follow: false, like: false, repost: false, comment: false },
@@ -552,9 +553,13 @@ async function syncActions() {
     }
     state.spinsAvailable = data.spinsAvailable;
     state.hasWon = !!data.hasWon;
+    if (state.hasWon) state.claimedAddress = data.address || "";
     setMsg("", null);
     updateBalanceLabel();
-    if (state.hasWon) showClaimCard();
+    if (state.hasWon) {
+      showClaimCard();
+      renderClaimState();
+    }
     if (typeof data.totalWinners === "number") updateGlobalStatus(data.totalWinners, data.maxWinners);
   } catch (e) {
     setMsg("Couldn't reach the server -- try again in a moment.", "error");
@@ -685,7 +690,9 @@ el.spinBtn.addEventListener("click", async function () {
 
     if (data.outcome === "win") {
       state.hasWon = true;
+      state.claimedAddress = "";
       showClaimCard();
+      renderClaimState();
     }
   } catch (e) {
     setMsg("Couldn't reach the server -- try again in a moment.", "error");
@@ -703,6 +710,27 @@ function showClaimCard() {
   el.claimCard.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// Reflects state.claimedAddress in the claim card. Split out from the
+// claim button's success handler so the SAME "already locked in" view
+// shows up on a plain page load/reload too -- previously the card always
+// re-rendered as an empty input form on every visit even for someone
+// who'd already locked an address in a past session, because that
+// already-claimed check only ever ran right after a successful submit,
+// never on load.
+function renderClaimState() {
+  if (!state.hasWon) return;
+  if (state.claimedAddress) {
+    el.claimForm.hidden = true;
+    el.claimIntro.textContent = "Locked in. Keep an eye on X -- the guaranteed-mint window and exact mint date go out there first.";
+    el.receipt.hidden = false;
+    el.receipt.textContent = "@" + state.xHandle + "  ·  " + state.claimedAddress;
+  } else {
+    el.claimForm.hidden = false;
+    el.claimIntro.textContent = "Enter the wallet you want your guaranteed mint on — this locks in your spot.";
+    el.receipt.hidden = true;
+  }
+}
+
 el.claimBtn.addEventListener("click", async function () {
   el.claimError.textContent = "";
   if (!state.xToken) { el.claimError.textContent = "Connect X first."; return; }
@@ -715,10 +743,8 @@ el.claimBtn.addEventListener("click", async function () {
     var data = await postAction("claim", { token: state.xToken, address: address });
     if (data.ok) {
       state.claimed = true;
-      el.claimForm.hidden = true;
-      el.claimIntro.textContent = "Locked in. Keep an eye on X -- the guaranteed-mint window and exact mint date go out there first.";
-      el.receipt.hidden = false;
-      el.receipt.textContent = "@" + state.xHandle + "  ·  " + address;
+      state.claimedAddress = address;
+      renderClaimState();
     } else if (data.error === "invalid_address") {
       el.claimError.textContent = "Enter a valid EVM wallet address (0x... 42 characters).";
     } else if (data.error === "not_a_winner") {
