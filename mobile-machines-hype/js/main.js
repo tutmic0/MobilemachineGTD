@@ -25,8 +25,8 @@
  * seconds, we trust you did it" -- see README.md for why.
  */
 var CONFIG = {
-  GOOGLE_SCRIPT_URL: "PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE",
-  xHandle: "MobileMachines",
+  GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
+  xHandle: "MobileMachineOS",
   xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
   enrollmentClosed: false,
 };
