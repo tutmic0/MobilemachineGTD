@@ -34,141 +34,113 @@
 </header>
 
 <main>
-  <section id="how">
-    <div class="wrap">
-      <div class="section-head">
-        <span class="eyebrow">How it works</span>
-        <h2 class="section-title">Every action is a spin.</h2>
-        <p class="section-sub">Do these four things and each one unlocks a spin on the wheel below &mdash; up to 4. Land on the guaranteed-mint slice and you're on the GTD roster.</p>
-      </div>
-
-      <div class="steps">
-        <div class="step">
-          <div class="step-icon">1</div>
-          <div class="step-title">Follow</div>
-          <div class="step-body">Follow <b id="step-handle-1">@MobileMachines</b> on X.</div>
-          <a class="btn btn-ghost step-btn" id="step-follow-link" href="#" target="_blank" rel="noopener">Follow</a>
-        </div>
-        <div class="step">
-          <div class="step-icon">2</div>
-          <div class="step-title">Like</div>
-          <div class="step-body">Like the announcement post.</div>
-          <a class="btn btn-ghost step-btn" id="step-post-link-1" href="#" target="_blank" rel="noopener">Open post</a>
-        </div>
-        <div class="step">
-          <div class="step-icon">3</div>
-          <div class="step-title">Repost</div>
-          <div class="step-body">Repost it so your network sees it too.</div>
-          <a class="btn btn-ghost step-btn" id="step-post-link-2" href="#" target="_blank" rel="noopener">Open post</a>
-        </div>
-        <div class="step">
-          <div class="step-icon">4</div>
-          <div class="step-title">Comment</div>
-          <div class="step-body">Drop a comment on the post &mdash; anything real.</div>
-          <a class="btn btn-ghost step-btn" id="step-post-link-3" href="#" target="_blank" rel="noopener">Open post</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="wrap"><div class="divider"></div></div>
-
   <section id="roster">
     <div class="wrap">
       <div class="section-head">
         <span class="eyebrow">Spin for a guaranteed spot</span>
         <h2 class="section-title">Hard to win. Not impossible.</h2>
-        <p class="section-sub">Every spin is decided by our server the instant you press the button &mdash; not by your browser, so there's no way to rig it client-side. Land on the GTD slice and your spot is locked in for real.</p>
+        <p class="section-sub">Connect X, do a few things, spin. Every spin is decided by our server the instant you press the button &mdash; not by your browser, so there's no way to rig it client-side.</p>
       </div>
 
-      <div class="spin-grid">
-        <div class="spin-stage">
-          <div class="phone-shell">
-            <div class="phone-cam"></div>
-            <div class="phone-screen">
-              <canvas id="wheel-canvas" width="600" height="600"></canvas>
-              <div class="wheel-pointer"></div>
-            </div>
-            <button class="phone-button" id="spin-btn" disabled>
-              <span id="spin-btn-label">SPIN</span>
+      <div class="status-card status-card-top">
+        <div class="status-row">
+          <span class="eyebrow" style="color:var(--paper-faint);">GTD won so far</span>
+          <span class="status-count" id="status-count">&mdash; / &mdash;</span>
+        </div>
+        <div class="progress"><div class="progress-fill" id="progress-fill" style="width:0%;"></div></div>
+        <p class="status-note" id="status-note">Spinning is open.</p>
+      </div>
+
+      <div class="flow">
+
+        <!-- Step 0: gate everything behind a real X login -->
+        <div class="connect-gate" id="connect-gate">
+          <span class="eyebrow">Start here</span>
+          <h3 class="connect-gate-title">Connect your X account</h3>
+          <p class="connect-gate-body">We use this to know the spins are really yours &mdash; no typing a handle, no faking it.</p>
+          <button type="button" class="btn btn-primary btn-block" id="x-connect-btn">Connect X</button>
+          <div class="field-error" id="connect-error"></div>
+        </div>
+
+        <!-- everything below only shows once connected -->
+        <div class="spin-flow" id="spin-flow" hidden>
+
+          <div class="connected-bar">
+            <span class="x-connected-dot" aria-hidden="true"></span>
+            <span>Connected as <b id="x-connected-handle"></b></span>
+            <button type="button" class="x-disconnect-btn" id="x-disconnect-btn">Disconnect</button>
+          </div>
+
+          <div class="step-cards" id="action-buttons">
+            <button type="button" class="step-card" id="act-follow" data-action="follow">
+              <span class="step-eyebrow">01 &middot; JOIN</span>
+              <h3 class="step-card-title">Follow <span id="act-follow-handle">@MobileMachines</span></h3>
+              <p class="step-card-body">Open the X profile and follow the account.</p>
+              <span class="step-card-btn">Follow</span>
+            </button>
+            <button type="button" class="step-card" id="act-like" data-action="like">
+              <span class="step-eyebrow">02 &middot; SUPPORT</span>
+              <h3 class="step-card-title">Like the post</h3>
+              <p class="step-card-body">Open the announcement post and like it.</p>
+              <span class="step-card-btn">Like</span>
+            </button>
+            <button type="button" class="step-card" id="act-repost" data-action="repost">
+              <span class="step-eyebrow">03 &middot; SHARE</span>
+              <h3 class="step-card-title">Repost it</h3>
+              <p class="step-card-body">Send it to your network too.</p>
+              <span class="step-card-btn">Repost</span>
+            </button>
+            <button type="button" class="step-card" id="act-comment" data-action="comment">
+              <span class="step-eyebrow">04 &middot; SPEAK</span>
+              <h3 class="step-card-title">Comment on it</h3>
+              <p class="step-card-body">Drop a comment &mdash; anything real.</p>
+              <span class="step-card-btn">Comment</span>
             </button>
           </div>
-          <p class="spin-balance mono" id="spin-balance">Enter your details to unlock spins</p>
-          <div class="spin-log" id="spin-log"></div>
-        </div>
+          <p class="action-hint">Each one opens in a new tab &mdash; come back here after a few seconds and it checks itself off, worth +1 spin.</p>
 
-        <div class="spin-side">
-          <div class="ledger">
-            <div class="form-msg" id="form-msg"></div>
+          <div class="redeem-row">
+            <input type="text" id="redeem-code" placeholder="Redeem code">
+            <button type="button" class="btn btn-ghost" id="redeem-btn">Redeem</button>
+          </div>
+          <div class="field-error" id="redeem-error"></div>
+          <p class="redeem-hint">New code posted with every announcement &mdash; each one is good for extra spins on top of your 4.</p>
 
-            <div class="field">
-              <label>X account</label>
-              <button type="button" class="btn btn-primary btn-block x-connect-btn" id="x-connect-btn">Connect X to start</button>
-              <div class="x-connected-chip" id="x-connected-chip" hidden>
-                <span class="x-connected-dot" aria-hidden="true"></span>
-                <span>Connected as <b id="x-connected-handle"></b></span>
-                <button type="button" class="x-disconnect-btn" id="x-disconnect-btn">Disconnect</button>
+          <div class="form-msg" id="form-msg"></div>
+
+          <div class="spin-stage">
+            <div class="phone-shell">
+              <div class="phone-cam"></div>
+              <div class="phone-screen">
+                <canvas id="wheel-canvas" width="600" height="600"></canvas>
+                <div class="wheel-pointer"></div>
               </div>
-              <div class="field-error" id="connect-error"></div>
-            </div>
-            <div class="field mono">
-              <label for="address">Wallet address</label>
-              <input type="text" id="address" placeholder="0x..." autocomplete="off">
-              <div class="field-error" id="address-error"></div>
-            </div>
-
-            <div class="checks" id="action-buttons">
-              <button type="button" class="action-btn" id="act-follow" data-action="follow">
-                <span class="action-check" aria-hidden="true"></span>
-                <span>Follow <b id="act-follow-handle">@MobileMachines</b> on X <i>(+1 spin)</i></span>
-              </button>
-              <button type="button" class="action-btn" id="act-like" data-action="like">
-                <span class="action-check" aria-hidden="true"></span>
-                <span>Like the announcement post <i>(+1 spin)</i></span>
-              </button>
-              <button type="button" class="action-btn" id="act-repost" data-action="repost">
-                <span class="action-check" aria-hidden="true"></span>
-                <span>Repost it <i>(+1 spin)</i></span>
-              </button>
-              <button type="button" class="action-btn" id="act-comment" data-action="comment">
-                <span class="action-check" aria-hidden="true"></span>
-                <span>Comment on it <i>(+1 spin)</i></span>
+              <button class="phone-button" id="spin-btn" disabled>
+                <span id="spin-btn-label">SPIN</span>
               </button>
             </div>
-            <p class="action-hint">Opens the link in a new tab &mdash; come back here after a few seconds and it checks itself off.</p>
-
-            <div class="redeem-row">
-              <input type="text" id="redeem-code" placeholder="Redeem code">
-              <button type="button" class="btn btn-ghost" id="redeem-btn">Redeem</button>
-            </div>
-            <div class="field-error" id="redeem-error"></div>
-            <p class="redeem-hint">New code posted with every announcement &mdash; each one is good for extra spins on top of your 4.</p>
-          </div>
-
-          <div class="status-card">
-            <div class="status-row">
-              <span class="eyebrow" style="color:var(--paper-faint);">GTD won so far</span>
-              <span class="status-count" id="status-count">&mdash; / &mdash;</span>
-            </div>
-            <div class="progress"><div class="progress-fill" id="progress-fill" style="width:0%;"></div></div>
-            <p class="status-note" id="status-note">Spinning is open.</p>
-
-            <div class="status-divider"></div>
-
-            <div class="status-fact"><span>Collection size</span><b>4,444</b></div>
-            <div class="status-fact"><span>Total GTD spots</span><b>1,000</b></div>
-            <div class="status-fact"><span>Spin cost</span><b>Free</b></div>
+            <p class="spin-balance mono" id="spin-balance">Do the steps above to earn spins</p>
+            <div class="spin-log" id="spin-log"></div>
           </div>
         </div>
-      </div>
 
-      <div class="success-card" id="success-card" hidden>
-        <div class="success-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>
+        <!-- only shown once a spin actually lands on the GTD slice -->
+        <div class="claim-card" id="claim-card" hidden>
+          <div class="success-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <h3>You landed the GTD slice.</h3>
+          <p id="claim-intro">Enter the wallet you want your guaranteed mint on &mdash; this locks in your spot.</p>
+
+          <div class="claim-form" id="claim-form">
+            <input type="text" class="mono" id="claim-address" placeholder="0x..." autocomplete="off">
+            <button type="button" class="btn btn-primary" id="claim-btn">Lock in spot</button>
+          </div>
+          <div class="field-error" id="claim-error"></div>
+
+          <div class="receipt" id="receipt" hidden></div>
         </div>
-        <h3>You landed the GTD slice.</h3>
-        <p>Keep an eye on X &mdash; the guaranteed-mint window and exact mint date go out there first.</p>
-        <div class="receipt" id="receipt"></div>
+
       </div>
     </div>
   </section>
