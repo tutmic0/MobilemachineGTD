@@ -109,18 +109,13 @@
           <div class="form-msg" id="form-msg"></div>
 
           <div class="spin-stage">
-            <div class="phone-shell">
-              <div class="phone-cam"></div>
-              <div class="phone-screen">
-                <div class="wheel-frame">
-                  <canvas id="wheel-canvas" width="600" height="600"></canvas>
-                </div>
-                <div class="wheel-pointer"></div>
-              </div>
-              <button class="phone-button" id="spin-btn" disabled>
-                <span id="spin-btn-label">SPIN</span>
-              </button>
+            <div class="wheel-wrap">
+              <div class="wheel-pointer"></div>
+              <canvas id="wheel-canvas" width="600" height="600"></canvas>
             </div>
+            <button class="spin-btn" id="spin-btn" disabled>
+              <span id="spin-btn-label">SPIN</span>
+            </button>
             <p class="spin-balance mono" id="spin-balance">Do the steps above to earn spins</p>
             <div class="spin-log" id="spin-log"></div>
           </div>
