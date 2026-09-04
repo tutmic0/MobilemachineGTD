@@ -327,12 +327,17 @@ function drawWheel() {
 
   // hub
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.14, 0, Math.PI * 2);
-  ctx.fillStyle = "#090b0c";
+  ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = "#eaf6f2";
   ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#2fae95";
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#090b0c";
   ctx.stroke();
+  ctx.fillStyle = "#0a1413";
+  ctx.font = "700 " + Math.round(r * 0.16) + "px 'IBM Plex Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("MM", cx, cy);
 
   // outer rim
   ctx.beginPath();
