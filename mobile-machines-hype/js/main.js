@@ -32,8 +32,8 @@
  * Portal and in api/_lib/config.js -- see README.md section 2b.
  */
 var CONFIG = {
-  xHandle: "MobileMachines",
-  xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
+  xHandle: "mobilemachineOS",
+  xPostUrl: "https://x.com/mobilemachineOS/status/REPLACE_ME",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
   xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
@@ -133,7 +133,63 @@ var state = {
 
 // key -> timestamp when the user clicked out. Checked on every
 // visibility/focus change; cleared once ACTION_MIN_AWAY_MS has passed.
+//
+// Also mirrored to localStorage (below), for the same reason the session
+// token moved there: if Chrome reloads this page from scratch after the
+// X app hand-off, this in-memory object is gone and a click that
+// genuinely happened would otherwise just be forgotten -- "ništa od
+// procesa" even though the visitor did everything right.
 var pendingActions = {};
+
+function actionsStorageKeys(handle) {
+  return {
+    done: "mm_actions_done_" + handle,
+    pending: "mm_actions_pending_" + handle,
+  };
+}
+
+function saveActionsDone() {
+  if (!state.xHandle) return;
+  try { localStorage.setItem(actionsStorageKeys(state.xHandle).done, JSON.stringify(state.actionsDone)); } catch (e) { /* ignore */ }
+}
+
+function savePendingActions() {
+  if (!state.xHandle) return;
+  try { localStorage.setItem(actionsStorageKeys(state.xHandle).pending, JSON.stringify(pendingActions)); } catch (e) { /* ignore */ }
+}
+
+// Called once on boot, after we know which handle (if any) is signed in --
+// pulls back anything this browser already knew about that handle before
+// whatever reload just happened.
+function restoreActionsState() {
+  if (!state.xHandle) return;
+  var keys = actionsStorageKeys(state.xHandle);
+  try {
+    var doneRaw = localStorage.getItem(keys.done);
+    if (doneRaw) {
+      var doneParsed = JSON.parse(doneRaw);
+      Object.keys(state.actionsDone).forEach(function (k) {
+        if (doneParsed[k]) state.actionsDone[k] = true;
+      });
+    }
+    var pendingRaw = localStorage.getItem(keys.pending);
+    if (pendingRaw) {
+      var pendingParsed = JSON.parse(pendingRaw);
+      Object.keys(pendingParsed).forEach(function (k) {
+        if (!state.actionsDone[k]) pendingActions[k] = pendingParsed[k];
+      });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function clearActionsState(handle) {
+  if (!handle) return;
+  var keys = actionsStorageKeys(handle);
+  try {
+    localStorage.removeItem(keys.done);
+    localStorage.removeItem(keys.pending);
+  } catch (e) { /* ignore */ }
+}
 
 function wireLinks() {
   var heroLink = document.getElementById("hero-x-link");
@@ -147,19 +203,32 @@ function setMsg(text, type) {
   el.formMsg.className = "form-msg" + (text ? " show" : "") + (type ? " " + type : "");
 }
 
-// ---------------- session storage (per-tab, matches the token's own TTL) ----------------
+// ---------------- session storage ----------------
+//
+// localStorage, not sessionStorage: on mobile, tapping a Follow/Like/etc
+// button hands off to the X app, and Android is free to fully kill
+// Chrome's background tab while X is in the foreground. When the user
+// comes back, Chrome (or the user, picking a tab from the switcher) may
+// reload the page from scratch -- sessionStorage for that browsing
+// context can come back empty even though it's "the same tab" as far as
+// the user's concerned, which is exactly what showed up as "connected
+// on PC, but the phone says not connected after coming back from X".
+// localStorage survives a process kill/reload and is shared by every
+// tab of this origin, so it doesn't matter which tab/reload the user
+// ends up looking at. The token itself still expires server-side after
+// 6h (see api/_lib/crypto.js) regardless of how long it sits here.
 
 function saveSession(handle, token) {
   try {
-    sessionStorage.setItem("mm_x_handle", handle);
-    sessionStorage.setItem("mm_x_token", token);
+    localStorage.setItem("mm_x_handle", handle);
+    localStorage.setItem("mm_x_token", token);
   } catch (e) { /* private mode etc -- session just won't survive a reload */ }
 }
 
 function loadSession() {
   try {
-    var handle = sessionStorage.getItem("mm_x_handle");
-    var token = sessionStorage.getItem("mm_x_token");
+    var handle = localStorage.getItem("mm_x_handle");
+    var token = localStorage.getItem("mm_x_token");
     if (handle && token) return { handle: handle, token: token };
   } catch (e) { /* ignore */ }
   return null;
@@ -167,8 +236,8 @@ function loadSession() {
 
 function clearSession() {
   try {
-    sessionStorage.removeItem("mm_x_handle");
-    sessionStorage.removeItem("mm_x_token");
+    localStorage.removeItem("mm_x_handle");
+    localStorage.removeItem("mm_x_token");
   } catch (e) { /* ignore */ }
 }
 
@@ -295,6 +364,7 @@ el.xConnectBtn.addEventListener("click", function () {
 });
 
 el.xDisconnectBtn.addEventListener("click", function () {
+  clearActionsState(state.xHandle);
   state.xHandle = null;
   state.xToken = null;
   clearSession();
@@ -513,6 +583,8 @@ function checkPendingActions() {
     }
   });
   if (changed) {
+    saveActionsDone();
+    savePendingActions();
     renderActionButtons();
     syncActions();
   }
@@ -530,6 +602,7 @@ Object.keys(el.actionButtons).forEach(function (key) {
     var urlFn = ACTION_LINKS[key];
     window.open(urlFn(), "_blank", "noopener");
     pendingActions[key] = Date.now();
+    savePendingActions();
     renderActionButtons();
 
     // On mobile, an x.com link very often hands off to the native X app
@@ -676,6 +749,18 @@ async function boot() {
   drawWheel();
   wireLinks();
   renderConnectState();
+
+  if (state.xHandle) {
+    restoreActionsState();
+    // Resolve anything that already cleared ACTION_MIN_AWAY_MS while this
+    // page was gone/reloaded, and schedule the rest to resolve once their
+    // own remaining time is up (covers the reload happening mid-wait).
+    checkPendingActions();
+    Object.keys(pendingActions).forEach(function (key) {
+      var remaining = ACTION_MIN_AWAY_MS - (Date.now() - pendingActions[key]);
+      setTimeout(checkPendingActions, Math.max(remaining, 0) + 300);
+    });
+  }
   renderActionButtons();
   loadGlobalStatus();
   updateBalanceLabel();
