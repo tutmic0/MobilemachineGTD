@@ -37,7 +37,7 @@ var CONFIG = {
   xHandle: "MobileMachines",
   xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
-  xOauthRedirectUri: "https://mobilemachine-gtd.vercel.app/",
+  xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
   enrollmentClosed: false,
 };
