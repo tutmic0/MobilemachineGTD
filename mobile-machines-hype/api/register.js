@@ -29,6 +29,7 @@ module.exports = async (req, res) => {
         spinsAvailable: spinsAvailable(updated),
         hasWon: !!updated.has_won,
         hasAddress: !!updated.address,
+        address: updated.address || "",
         totalWinners,
         maxWinners: config.MAX_WINNERS,
       };
