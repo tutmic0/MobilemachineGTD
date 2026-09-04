@@ -531,6 +531,18 @@ Object.keys(el.actionButtons).forEach(function (key) {
     window.open(urlFn(), "_blank", "noopener");
     pendingActions[key] = Date.now();
     renderActionButtons();
+
+    // On mobile, an x.com link very often hands off to the native X app
+    // entirely (universal links) instead of opening a browser tab -- in
+    // that case this page's tab never regains focus/visibility (the
+    // visitor's "back" press just moves around inside the X app), so
+    // the visibilitychange/focus listeners below never fire and the
+    // action would be stuck "pending" forever even though the visitor
+    // really did it. This timer is a fallback that marks it done after
+    // ACTION_MIN_AWAY_MS regardless of whether focus ever comes back --
+    // this whole check was already trust-based (never verified against
+    // the X API), so this doesn't loosen anything that mattered.
+    setTimeout(checkPendingActions, ACTION_MIN_AWAY_MS + 300);
   });
 });
 
