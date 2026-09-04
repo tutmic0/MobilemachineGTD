@@ -17,16 +17,15 @@
  * campaign live in Code.gs, not here -- the browser is never trusted
  * to decide or even know the exact odds, only the backend is.
  *
- * Identity: there's no typed "X handle" field anymore. Clicking
- * "Connect X" sends people through a real X OAuth 2.0 login (handled
- * entirely by Code.gs, see its "Connect X" section) and they come back
- * with a signed session token that proves the handle. The 4 actions
- * below are still just "open the link, and if you're gone at least 5
- * seconds, we trust you did it" -- see README.md for why.
+ * Flow: Connect X (real OAuth 2.0 login, handled by Code.gs) -> do the
+ * 4 steps (each just opens an X link and trusts you did it once you're
+ * back for 5+ seconds, see README) -> spin. A wallet address is only
+ * ever asked for at the very end, if a spin actually lands on the GTD
+ * slice -- everything before that only needs your X identity.
  */
 var CONFIG = {
   GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
-  xHandle: "MobileMachineOS",
+  xHandle: "MobileMachines",
   xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
   enrollmentClosed: false,
 };
@@ -76,13 +75,12 @@ var CONNECT_ERROR_MESSAGES = {
 };
 
 var el = {
+  connectGate: document.getElementById("connect-gate"),
   xConnectBtn: document.getElementById("x-connect-btn"),
-  xConnectedChip: document.getElementById("x-connected-chip"),
+  spinFlow: document.getElementById("spin-flow"),
   xConnectedHandle: document.getElementById("x-connected-handle"),
   xDisconnectBtn: document.getElementById("x-disconnect-btn"),
   connectError: document.getElementById("connect-error"),
-  address: document.getElementById("address"),
-  addressError: document.getElementById("address-error"),
   actionButtons: {
     follow: document.getElementById("act-follow"),
     like: document.getElementById("act-like"),
@@ -98,7 +96,12 @@ var el = {
   spinBtnLabel: document.getElementById("spin-btn-label"),
   spinBalance: document.getElementById("spin-balance"),
   spinLog: document.getElementById("spin-log"),
-  successCard: document.getElementById("success-card"),
+  claimCard: document.getElementById("claim-card"),
+  claimForm: document.getElementById("claim-form"),
+  claimAddress: document.getElementById("claim-address"),
+  claimBtn: document.getElementById("claim-btn"),
+  claimError: document.getElementById("claim-error"),
+  claimIntro: document.getElementById("claim-intro"),
   receipt: document.getElementById("receipt"),
   statusCount: document.getElementById("status-count"),
   progressFill: document.getElementById("progress-fill"),
@@ -108,9 +111,9 @@ var el = {
 var state = {
   xHandle: null,
   xToken: null,
-  registered: false,
   spinsAvailable: 0,
   hasWon: false,
+  claimed: false,
   wheelRotation: 0,
   spinning: false,
   actionsDone: { follow: false, like: false, repost: false, comment: false },
@@ -121,17 +124,8 @@ var state = {
 var pendingActions = {};
 
 function wireLinks() {
-  var profileUrl = "https://x.com/" + CONFIG.xHandle;
   var heroLink = document.getElementById("hero-x-link");
-  var followLink = document.getElementById("step-follow-link");
-  if (heroLink) heroLink.href = profileUrl;
-  if (followLink) followLink.href = profileUrl;
-  ["step-post-link-1", "step-post-link-2", "step-post-link-3"].forEach(function (id) {
-    var node = document.getElementById(id);
-    if (node) node.href = CONFIG.xPostUrl;
-  });
-  var stepHandle = document.getElementById("step-handle-1");
-  if (stepHandle) stepHandle.textContent = "@" + CONFIG.xHandle;
+  if (heroLink) heroLink.href = "https://x.com/" + CONFIG.xHandle;
   var actFollowHandle = document.getElementById("act-follow-handle");
   if (actFollowHandle) actFollowHandle.textContent = "@" + CONFIG.xHandle;
 }
@@ -166,14 +160,6 @@ function clearSession() {
   } catch (e) { /* ignore */ }
 }
 
-function saveAddress(addr) {
-  try { sessionStorage.setItem("mm_address", addr); } catch (e) { /* ignore */ }
-}
-
-function loadAddress() {
-  try { return sessionStorage.getItem("mm_address") || ""; } catch (e) { return ""; }
-}
-
 // ---------------- "Connect X" redirect handling ----------------
 
 function consumeConnectHash() {
@@ -204,8 +190,8 @@ function consumeConnectHash() {
 
 function renderConnectState() {
   var connected = !!(state.xHandle && state.xToken);
-  el.xConnectBtn.hidden = connected;
-  el.xConnectedChip.hidden = !connected;
+  el.connectGate.hidden = connected;
+  el.spinFlow.hidden = !connected;
   if (connected) el.xConnectedHandle.textContent = "@" + state.xHandle;
 }
 
@@ -357,47 +343,18 @@ function handleMaybeExpiredSession() {
   setMsg("Your X connection expired -- connect again to keep spinning.", "info");
 }
 
-function addressValue() {
-  return el.address.value.trim();
-}
-
-function currentIdentity() {
-  var address = addressValue();
-  var ok = true;
-
-  if (!state.xToken || !state.xHandle) {
-    el.connectError.textContent = "Connect X first.";
-    ok = false;
-  } else {
-    el.connectError.textContent = "";
-  }
-  if (!ADDR_RE.test(address)) {
-    el.addressError.textContent = "Enter a valid EVM wallet address (0x... 42 characters).";
-    ok = false;
-  } else {
-    el.addressError.textContent = "";
-  }
-  return ok ? { token: state.xToken, address: address } : null;
-}
-
 function updateBalanceLabel() {
   if (state.hasWon) {
     el.spinBalance.innerHTML = "You already landed the GTD slice -- no more spins needed.";
     el.spinBtn.disabled = true;
     return;
   }
-  if (!state.xToken) {
-    el.spinBalance.innerHTML = "Connect X to unlock spins";
-  } else {
-    el.spinBalance.innerHTML = "Spins available: <b>" + state.spinsAvailable + "</b>";
-  }
+  el.spinBalance.innerHTML = "Spins available: <b>" + state.spinsAvailable + "</b>";
   el.spinBtn.disabled = state.spinsAvailable <= 0 || CONFIG.enrollmentClosed || state.spinning;
 }
 
 async function syncActions() {
   if (!state.xToken) return; // nothing to sync until they've connected X
-  var address = addressValue();
-  if (!ADDR_RE.test(address)) return; // wait until a real address is entered
   if (!backendReady()) {
     setMsg("This page isn't connected to a backend yet -- see README.md.", "error");
     return;
@@ -405,7 +362,6 @@ async function syncActions() {
   try {
     var data = await postAction("register", {
       token: state.xToken,
-      address: address,
       follow: state.actionsDone.follow,
       like: state.actionsDone.like,
       repost: state.actionsDone.repost,
@@ -416,21 +372,16 @@ async function syncActions() {
       else if (data.error === "invalid") handleMaybeExpiredSession();
       return;
     }
-    state.registered = true;
     state.spinsAvailable = data.spinsAvailable;
     state.hasWon = !!data.hasWon;
     setMsg("", null);
     updateBalanceLabel();
+    if (state.hasWon) showClaimCard();
     if (typeof data.totalWinners === "number") updateGlobalStatus(data.totalWinners, data.maxWinners);
   } catch (e) {
     setMsg("Couldn't reach the server -- try again in a moment.", "error");
   }
 }
-
-el.address.addEventListener("blur", function () {
-  if (addressValue()) saveAddress(addressValue());
-  syncActions();
-});
 
 // ---------------- action buttons (open link -> mark done on return) ----------------
 
@@ -467,6 +418,7 @@ window.addEventListener("focus", checkPendingActions);
 Object.keys(el.actionButtons).forEach(function (key) {
   el.actionButtons[key].addEventListener("click", function () {
     if (state.actionsDone[key]) return;
+    if (!state.xToken) { setMsg("Connect X first.", "error"); return; }
     var urlFn = ACTION_LINKS[key];
     window.open(urlFn(), "_blank", "noopener");
     pendingActions[key] = Date.now();
@@ -476,15 +428,14 @@ Object.keys(el.actionButtons).forEach(function (key) {
 
 el.redeemBtn.addEventListener("click", async function () {
   el.redeemError.textContent = "";
-  var identity = currentIdentity();
-  if (!identity) { el.redeemError.textContent = "Connect X and enter your wallet address first."; return; }
+  if (!state.xToken) { el.redeemError.textContent = "Connect X first."; return; }
   var code = el.redeemCode.value.trim();
   if (!code) { el.redeemError.textContent = "Enter a code."; return; }
   if (!backendReady()) { setMsg("This page isn't connected to a backend yet -- see README.md.", "error"); return; }
 
   el.redeemBtn.disabled = true;
   try {
-    var data = await postAction("redeem", Object.assign({}, identity, { code: code }));
+    var data = await postAction("redeem", { token: state.xToken, code: code });
     if (data.ok) {
       state.spinsAvailable = data.spinsAvailable;
       updateBalanceLabel();
@@ -515,8 +466,7 @@ function logSpin(outcome) {
 }
 
 el.spinBtn.addEventListener("click", async function () {
-  var identity = currentIdentity();
-  if (!identity) { setMsg("Connect X and enter your wallet address first.", "error"); return; }
+  if (!state.xToken) { setMsg("Connect X first.", "error"); return; }
   if (!backendReady()) { setMsg("This page isn't connected to a backend yet -- see README.md.", "error"); return; }
   if (state.spinning || state.spinsAvailable <= 0) return;
 
@@ -526,7 +476,7 @@ el.spinBtn.addEventListener("click", async function () {
   setMsg("", null);
 
   try {
-    var data = await postAction("spin", identity);
+    var data = await postAction("spin", { token: state.xToken });
     if (!data.ok) {
       if (data.error === "no_spins") setMsg("No spins left -- follow, like, repost, comment, or redeem a code for more.", "error");
       else if (data.error === "closed") setMsg("Spinning is closed.", "info");
@@ -542,9 +492,7 @@ el.spinBtn.addEventListener("click", async function () {
 
     if (data.outcome === "win") {
       state.hasWon = true;
-      el.successCard.hidden = false;
-      el.receipt.textContent = "@" + state.xHandle + "  ·  " + identity.address;
-      el.successCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      showClaimCard();
     }
   } catch (e) {
     setMsg("Couldn't reach the server -- try again in a moment.", "error");
@@ -552,6 +500,45 @@ el.spinBtn.addEventListener("click", async function () {
     state.spinning = false;
     el.spinBtnLabel.textContent = "SPIN";
     updateBalanceLabel();
+  }
+});
+
+// ---------------- claim (only reachable after an actual win) ----------------
+
+function showClaimCard() {
+  el.claimCard.hidden = false;
+  el.claimCard.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+el.claimBtn.addEventListener("click", async function () {
+  el.claimError.textContent = "";
+  if (!state.xToken) { el.claimError.textContent = "Connect X first."; return; }
+  var address = el.claimAddress.value.trim();
+  if (!ADDR_RE.test(address)) { el.claimError.textContent = "Enter a valid EVM wallet address (0x... 42 characters)."; return; }
+  if (!backendReady()) { el.claimError.textContent = "This page isn't connected to a backend yet."; return; }
+
+  el.claimBtn.disabled = true;
+  try {
+    var data = await postAction("claim", { token: state.xToken, address: address });
+    if (data.ok) {
+      state.claimed = true;
+      el.claimForm.hidden = true;
+      el.claimIntro.textContent = "Locked in. Keep an eye on X -- the guaranteed-mint window and exact mint date go out there first.";
+      el.receipt.hidden = false;
+      el.receipt.textContent = "@" + state.xHandle + "  ·  " + address;
+    } else if (data.error === "invalid_address") {
+      el.claimError.textContent = "Enter a valid EVM wallet address (0x... 42 characters).";
+    } else if (data.error === "not_a_winner") {
+      el.claimError.textContent = "This X account hasn't landed the GTD slice.";
+    } else if (data.error === "invalid") {
+      handleMaybeExpiredSession();
+    } else {
+      el.claimError.textContent = "Couldn't lock in that address -- try again.";
+    }
+  } catch (e) {
+    el.claimError.textContent = "Couldn't reach the server -- try again.";
+  } finally {
+    el.claimBtn.disabled = false;
   }
 });
 
@@ -564,8 +551,6 @@ if (restored) {
   state.xHandle = restored.handle;
   state.xToken = restored.token;
 }
-var restoredAddress = loadAddress();
-if (restoredAddress) el.address.value = restoredAddress;
 
 drawWheel();
 wireLinks();
@@ -574,6 +559,6 @@ renderActionButtons();
 loadGlobalStatus();
 updateBalanceLabel();
 
-// If we just came back connected (or restored from a prior visit) and
-// already have a wallet address, sync right away so spins are ready.
-if (state.xToken && ADDR_RE.test(addressValue())) syncActions();
+// If we just came back connected (or restored from a prior visit), pull
+// our current spin balance / win status right away.
+if (state.xToken) syncActions();
