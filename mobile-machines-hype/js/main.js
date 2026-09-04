@@ -35,7 +35,7 @@
 var CONFIG = {
   GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
   xHandle: "mobilemachineOS",
-  xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
+  xPostUrl: "https://x.com/mobilemachineOS/status/2095853487946961219?s=20",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
   xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
