@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile Machines — Spin for a Guaranteed Mint</title>
+<meta name="description" content="4,444 phones. Every one a signal, not just a picture. Follow, like, repost, comment — each one is a spin on the wheel for a guaranteed mint spot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <span class="eyebrow">4,444 phones &middot; on-chain earnings</span>
+      <h1 class="wordmark">MOBILE<br><em>MACHINES</em></h1>
+      <p class="hero-tagline">Every phone is a <span class="accent">signal</span>, not just a picture. Activate yours and it starts earning a share of real tokenized stock &mdash; paid out to the top 100 active phones every cycle.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="#roster">Spin for a spot</a>
+        <a class="btn btn-ghost" id="hero-x-link" href="#" target="_blank" rel="noopener">Follow on X</a>
+      </div>
+      <p class="hero-note">Nothing to buy &mdash; spins are free, decided by our server, and only ever affect the guaranteed-mint roster.</p>
+    </div>
+    <div class="hero-phones" aria-hidden="true">
+      <div class="phone-card pc-1"><img src="img/rare1.png" alt=""></div>
+      <div class="phone-card pc-2"><img src="img/legendary.png" alt=""></div>
+      <div class="phone-card pc-3"><img src="img/mid2.png" alt=""></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">How it works</span>
+        <h2 class="section-title">Every action is a spin.</h2>
+        <p class="section-sub">Do these four things and each one unlocks a spin on the wheel below &mdash; up to 4. Land on the guaranteed-mint slice and you're on the GTD roster.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-icon">1</div>
+          <div class="step-title">Follow</div>
+          <div class="step-body">Follow <b id="step-handle-1">@MobileMachines</b> on X.</div>
+          <a class="btn btn-ghost step-btn" id="step-follow-link" href="#" target="_blank" rel="noopener">Follow</a>
+        </div>
+        <div class="step">
+          <div class="step-icon">2</div>
+          <div class="step-title">Like</div>
+          <div class="step-body">Like the announcement post.</div>
+          <a class="btn btn-ghost step-btn" id="step-post-link-1" href="#" target="_blank" rel="noopener">Open post</a>
+        </div>
+        <div class="step">
+          <div class="step-icon">3</div>
+          <div class="step-title">Repost</div>
+          <div class="step-body">Repost it so your network sees it too.</div>
+          <a class="btn btn-ghost step-btn" id="step-post-link-2" href="#" target="_blank" rel="noopener">Open post</a>
+        </div>
+        <div class="step">
+          <div class="step-icon">4</div>
+          <div class="step-title">Comment</div>
+          <div class="step-body">Drop a comment on the post &mdash; anything real.</div>
+          <a class="btn btn-ghost step-btn" id="step-post-link-3" href="#" target="_blank" rel="noopener">Open post</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="divider"></div></div>
+
+  <section id="roster">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Spin for a guaranteed spot</span>
+        <h2 class="section-title">Hard to win. Not impossible.</h2>
+        <p class="section-sub">Every spin is decided by our server the instant you press the button &mdash; not by your browser, so there's no way to rig it client-side. Land on the GTD slice and your spot is locked in for real.</p>
+      </div>
+
+      <div class="spin-grid">
+        <div class="spin-stage">
+          <div class="phone-shell">
+            <div class="phone-cam"></div>
+            <div class="phone-screen">
+              <canvas id="wheel-canvas" width="600" height="600"></canvas>
+              <div class="wheel-pointer"></div>
+            </div>
+            <button class="phone-button" id="spin-btn" disabled>
+              <span id="spin-btn-label">SPIN</span>
+            </button>
+          </div>
+          <p class="spin-balance mono" id="spin-balance">Enter your details to unlock spins</p>
+          <div class="spin-log" id="spin-log"></div>
+        </div>
+
+        <div class="spin-side">
+          <div class="ledger">
+            <div class="form-msg" id="form-msg"></div>
+
+            <div class="field">
+              <label>X account</label>
+              <button type="button" class="btn btn-primary btn-block x-connect-btn" id="x-connect-btn">Connect X to start</button>
+              <div class="x-connected-chip" id="x-connected-chip" hidden>
+                <span class="x-connected-dot" aria-hidden="true"></span>
+                <span>Connected as <b id="x-connected-handle"></b></span>
+                <button type="button" class="x-disconnect-btn" id="x-disconnect-btn">Disconnect</button>
+              </div>
+              <div class="field-error" id="connect-error"></div>
+            </div>
+            <div class="field mono">
+              <label for="address">Wallet address</label>
+              <input type="text" id="address" placeholder="0x..." autocomplete="off">
+              <div class="field-error" id="address-error"></div>
+            </div>
+
+            <div class="checks" id="action-buttons">
+              <button type="button" class="action-btn" id="act-follow" data-action="follow">
+                <span class="action-check" aria-hidden="true"></span>
+                <span>Follow <b id="act-follow-handle">@MobileMachines</b> on X <i>(+1 spin)</i></span>
+              </button>
+              <button type="button" class="action-btn" id="act-like" data-action="like">
+                <span class="action-check" aria-hidden="true"></span>
+                <span>Like the announcement post <i>(+1 spin)</i></span>
+              </button>
+              <button type="button" class="action-btn" id="act-repost" data-action="repost">
+                <span class="action-check" aria-hidden="true"></span>
+                <span>Repost it <i>(+1 spin)</i></span>
+              </button>
+              <button type="button" class="action-btn" id="act-comment" data-action="comment">
+                <span class="action-check" aria-hidden="true"></span>
+                <span>Comment on it <i>(+1 spin)</i></span>
+              </button>
+            </div>
+            <p class="action-hint">Opens the link in a new tab &mdash; come back here after a few seconds and it checks itself off.</p>
+
+            <div class="redeem-row">
+              <input type="text" id="redeem-code" placeholder="Redeem code">
+              <button type="button" class="btn btn-ghost" id="redeem-btn">Redeem</button>
+            </div>
+            <div class="field-error" id="redeem-error"></div>
+            <p class="redeem-hint">New code posted with every announcement &mdash; each one is good for extra spins on top of your 4.</p>
+          </div>
+
+          <div class="status-card">
+            <div class="status-row">
+              <span class="eyebrow" style="color:var(--paper-faint);">GTD won so far</span>
+              <span class="status-count" id="status-count">&mdash; / &mdash;</span>
+            </div>
+            <div class="progress"><div class="progress-fill" id="progress-fill" style="width:0%;"></div></div>
+            <p class="status-note" id="status-note">Spinning is open.</p>
+
+            <div class="status-divider"></div>
+
+            <div class="status-fact"><span>Collection size</span><b>4,444</b></div>
+            <div class="status-fact"><span>Total GTD spots</span><b>1,000</b></div>
+            <div class="status-fact"><span>Spin cost</span><b>Free</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="success-card" id="success-card" hidden>
+        <div class="success-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h3>You landed the GTD slice.</h3>
+        <p>Keep an eye on X &mdash; the guaranteed-mint window and exact mint date go out there first.</p>
+        <div class="receipt" id="receipt"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="divider"></div></div>
+
+  <footer>
+    <div class="wrap">
+      <p class="foot-line">Mobile Machines &mdash; 4,444 phones, on-chain earnings. Activate a phone and it earns a share of real tokenized stock, paid out to the top 100 active phones every cycle. Spinning here is free and doesn't require a wallet connection or payment &mdash; it only ever reserves a spot on the guaranteed-mint roster, decided by our server, never your browser.</p>
+    </div>
+  </footer>
+</main>
+
+<script src="js/main.js"></script>
+</body>
+</html>
