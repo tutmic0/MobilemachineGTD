@@ -17,16 +17,28 @@
  * campaign live in Code.gs, not here -- the browser is never trusted
  * to decide or even know the exact odds, only the backend is.
  *
- * Flow: Connect X (real OAuth 2.0 login, handled by Code.gs) -> do the
- * 4 steps (each just opens an X link and trusts you did it once you're
- * back for 5+ seconds, see README) -> spin. A wallet address is only
- * ever asked for at the very end, if a spin actually lands on the GTD
- * slice -- everything before that only needs your X identity.
+ * Flow: Connect X -> do the 4 steps (each just opens an X link and
+ * trusts you did it once you're back for 5+ seconds, see README) ->
+ * spin. A wallet address is only ever asked for at the very end, if a
+ * spin actually lands on the GTD slice -- everything before that only
+ * needs your X identity.
+ *
+ * The "Connect X" login itself never leaves this page for an
+ * in-between screen: this page builds the X login URL itself (PKCE,
+ * right below) and navigates straight to x.com, and when X sends the
+ * visitor straight back here with a code, this page hands that code to
+ * Code.gs as a plain background request (not a redirect) to get back a
+ * handle + session token. xClientId/xOauthRedirectUri/xOauthScopes
+ * below have to match what's registered on X Developer Portal and in
+ * Code.gs -- see README.md section 2b.
  */
 var CONFIG = {
   GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
   xHandle: "MobileMachines",
   xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
+  xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
+  xOauthRedirectUri: "https://mobilemachine-gtd.vercel.app/",
+  xOauthScopes: "users.read tweet.read",
   enrollmentClosed: false,
 };
 
@@ -68,10 +80,12 @@ var ACTION_LINKS = {
 var CONNECT_ERROR_MESSAGES = {
   access_denied: "You cancelled the X login.",
   missing_code: "X didn't send back a login code -- try again.",
+  missing_params: "That login link was incomplete -- click Connect X again.",
   expired_state: "That login link expired -- click Connect X again.",
   token_exchange_failed: "Couldn't complete the X login -- try again in a moment.",
   profile_read_failed: "Connected to X but couldn't read your handle -- try again.",
   exception: "Something went wrong connecting to X -- try again.",
+  unreachable: "Couldn't reach the server -- try again in a moment.",
 };
 
 var el = {
@@ -160,31 +174,90 @@ function clearSession() {
   } catch (e) { /* ignore */ }
 }
 
-// ---------------- "Connect X" redirect handling ----------------
+// ---------------- "Connect X" -- client-side PKCE, no in-between page ----------------
 
-function consumeConnectHash() {
-  var hash = window.location.hash || "";
-  if (hash.indexOf("#connected") === 0) {
-    var qs = hash.slice(hash.indexOf("&") + 1);
-    var params = new URLSearchParams(qs);
-    var handle = params.get("handle");
-    var token = params.get("token");
-    history.replaceState(null, "", window.location.pathname + window.location.search);
-    if (handle && token) {
-      state.xHandle = handle;
-      state.xToken = token;
-      saveSession(handle, token);
-      setMsg("", null);
-    }
+function base64UrlEncodeBytes(bytes) {
+  var bin = "";
+  for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function randomPkceString() {
+  var bytes = new Uint8Array(48);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncodeBytes(bytes);
+}
+
+async function pkceChallengeFor(verifier) {
+  var data = new TextEncoder().encode(verifier);
+  var digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncodeBytes(new Uint8Array(digest));
+}
+
+async function beginXConnect() {
+  var verifier = randomPkceString();
+  var state_ = randomPkceString();
+  var challenge = await pkceChallengeFor(verifier);
+  try {
+    sessionStorage.setItem("mm_pkce_verifier", verifier);
+    sessionStorage.setItem("mm_pkce_state", state_);
+  } catch (e) { /* private mode etc -- return trip just won't find them, handled below */ }
+
+  var url = "https://x.com/i/oauth2/authorize"
+    + "?response_type=code"
+    + "&client_id=" + encodeURIComponent(CONFIG.xClientId)
+    + "&redirect_uri=" + encodeURIComponent(CONFIG.xOauthRedirectUri)
+    + "&scope=" + encodeURIComponent(CONFIG.xOauthScopes)
+    + "&state=" + encodeURIComponent(state_)
+    + "&code_challenge=" + encodeURIComponent(challenge)
+    + "&code_challenge_method=S256";
+  window.location.href = url;
+}
+
+// Runs once on page load. If we just came back from X (this page IS
+// CONFIG.xOauthRedirectUri), the URL carries ?code=...&state=... --
+// exchange it for a handle+token over a plain background request and
+// never touch the address bar's path, so this never looks like a
+// separate "callback page" to the visitor.
+async function consumeOAuthReturn() {
+  var params = new URLSearchParams(window.location.search);
+  var code = params.get("code");
+  var errorParam = params.get("error");
+  var returnedState = params.get("state");
+  if (!code && !errorParam) return;
+
+  history.replaceState(null, "", window.location.pathname + window.location.hash);
+
+  if (errorParam) {
+    el.connectError.textContent = CONNECT_ERROR_MESSAGES[errorParam] || "Couldn't connect X -- try again.";
     return;
   }
-  if (hash.indexOf("#connect_error") === 0) {
-    var qs2 = hash.slice(hash.indexOf("&") + 1);
-    var params2 = new URLSearchParams(qs2);
-    var reason = params2.get("reason") || "";
-    history.replaceState(null, "", window.location.pathname + window.location.search);
-    el.connectError.textContent = CONNECT_ERROR_MESSAGES[reason] || "Couldn't connect X -- try again.";
+
+  var expectedState = null, verifier = null;
+  try {
+    expectedState = sessionStorage.getItem("mm_pkce_state");
+    verifier = sessionStorage.getItem("mm_pkce_verifier");
+    sessionStorage.removeItem("mm_pkce_state");
+    sessionStorage.removeItem("mm_pkce_verifier");
+  } catch (e) { /* ignore */ }
+
+  if (!verifier || !returnedState || returnedState !== expectedState) {
+    el.connectError.textContent = CONNECT_ERROR_MESSAGES.expired_state;
     return;
+  }
+  if (!backendReady()) { setMsg("This page isn't connected to a backend yet -- see README.md.", "error"); return; }
+
+  try {
+    var data = await postAction("oauth_exchange", { code: code, code_verifier: verifier });
+    if (data.ok && data.handle && data.token) {
+      state.xHandle = data.handle;
+      state.xToken = data.token;
+      saveSession(data.handle, data.token);
+    } else {
+      el.connectError.textContent = CONNECT_ERROR_MESSAGES[data.error] || "Couldn't complete X login -- try again.";
+    }
+  } catch (e) {
+    el.connectError.textContent = CONNECT_ERROR_MESSAGES.unreachable;
   }
 }
 
@@ -197,7 +270,9 @@ function renderConnectState() {
 
 el.xConnectBtn.addEventListener("click", function () {
   if (!backendReady()) { setMsg("This page isn't connected to a backend yet -- see README.md.", "error"); return; }
-  window.location.href = CONFIG.GOOGLE_SCRIPT_URL + "?action=oauth_start";
+  beginXConnect().catch(function () {
+    el.connectError.textContent = "Couldn't start the X login -- try again.";
+  });
 });
 
 el.xDisconnectBtn.addEventListener("click", function () {
@@ -544,21 +619,25 @@ el.claimBtn.addEventListener("click", async function () {
 
 // ---------------- boot ----------------
 
-consumeConnectHash();
+async function boot() {
+  var restored = loadSession();
+  if (restored) {
+    state.xHandle = restored.handle;
+    state.xToken = restored.token;
+  }
 
-var restored = state.xToken ? null : loadSession();
-if (restored) {
-  state.xHandle = restored.handle;
-  state.xToken = restored.token;
+  await consumeOAuthReturn(); // may overwrite state.xHandle/xToken with a fresh login
+
+  drawWheel();
+  wireLinks();
+  renderConnectState();
+  renderActionButtons();
+  loadGlobalStatus();
+  updateBalanceLabel();
+
+  // If we're connected (restored, or just came back from X), pull our
+  // current spin balance / win status right away.
+  if (state.xToken) syncActions();
 }
 
-drawWheel();
-wireLinks();
-renderConnectState();
-renderActionButtons();
-loadGlobalStatus();
-updateBalanceLabel();
-
-// If we just came back connected (or restored from a prior visit), pull
-// our current spin balance / win status right away.
-if (state.xToken) syncActions();
+boot();
