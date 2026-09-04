@@ -3,19 +3,18 @@
 /**
  * Everything you need to edit before going live is right here.
  *
- * GOOGLE_SCRIPT_URL: paste the Web App URL you get from deploying
- *   google-apps-script/Code.gs (see README.md step 2). This is also
- *   the exact URL you register as the X app's OAuth redirect URI.
+ * The backend is a set of Vercel Functions under /api (same domain as
+ * this page, no separate URL to paste anywhere) backed by Postgres --
+ * see db/schema.sql and api/_lib/config.js for the backend-side knobs
+ * (odds, MAX_WINNERS, CURRENT_CODE, etc). The browser is never trusted
+ * to decide or even know the exact odds, only the backend is.
+ *
  * xHandle: your X handle, WITHOUT the @.
  * xPostUrl: the link to the actual announcement post people need to
  *   like/repost/comment on -- update this the moment you post it.
  * enrollmentClosed: flip to true once you're done spinning entirely
- *   (also flip ENROLLMENT_CLOSED in Code.gs to match -- that's what
- *   actually blocks the backend, this just controls the UI).
- *
- * The odds (win/bonus probability) and the total GTD cap for this
- * campaign live in Code.gs, not here -- the browser is never trusted
- * to decide or even know the exact odds, only the backend is.
+ *   (also flip ENROLLMENT_CLOSED in api/_lib/config.js to match --
+ *   that's what actually blocks the backend, this just controls the UI).
  *
  * Flow: Connect X -> do the 4 steps (each just opens an X link and
  * trusts you did it once you're back for 5+ seconds, see README) ->
@@ -27,13 +26,12 @@
  * in-between screen: this page builds the X login URL itself (PKCE,
  * right below) and navigates straight to x.com, and when X sends the
  * visitor straight back here with a code, this page hands that code to
- * Code.gs as a plain background request (not a redirect) to get back a
- * handle + session token. xClientId/xOauthRedirectUri/xOauthScopes
- * below have to match what's registered on X Developer Portal and in
- * Code.gs -- see README.md section 2b.
+ * /api/oauth-exchange as a plain background request (not a redirect) to
+ * get back a handle + session token. xClientId/xOauthRedirectUri/
+ * xOauthScopes below have to match what's registered on X Developer
+ * Portal and in api/_lib/config.js -- see README.md section 2b.
  */
 var CONFIG = {
-  GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxROIDY3MifFt-6GEZ8SX5rxNg-kh013Sh1mlkB0SBPsFuvvOoob5KYURC5iCx_UQN0/exec",
   xHandle: "MobileMachines",
   xPostUrl: "https://x.com/MobileMachines/status/REPLACE_ME",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
@@ -213,12 +211,15 @@ async function beginXConnect() {
   // redirect back -- sessionStorage from this tab wouldn't be visible
   // there at all. "state" always comes back correctly in the redirect
   // URL no matter which context receives it, so that's what we key on.
-  try {
-    await postAction("oauth_stash", { state: state_, verifier: verifier });
-  } catch (e) {
+  //
+  // Fire this with keepalive so it survives the page navigating away
+  // right after -- but deliberately DON'T await it. Apps Script can take
+  // a second or more to respond, and this click should feel instant:
+  // navigate to X immediately, let the stash land in the background.
+  postAction("oauth_stash", { state: state_, verifier: verifier }, { keepalive: true }).catch(function () {
     // If this fails (offline, etc.) we still try the login -- the local
     // sessionStorage copy above is the fallback for the same-tab case.
-  }
+  });
 
   var url = "https://x.com/i/oauth2/authorize"
     + "?response_type=code"
@@ -394,25 +395,34 @@ function spinToOutcome(outcome) {
 
 // ---------------- backend calls ----------------
 
+// The backend now lives right alongside this page (Vercel Functions
+// under /api), so there's no separate URL to paste/misconfigure anymore.
+var API_PATHS = {
+  oauth_stash: "/api/oauth-stash",
+  oauth_exchange: "/api/oauth-exchange",
+  register: "/api/register",
+  redeem: "/api/redeem",
+  spin: "/api/spin",
+  claim: "/api/claim",
+};
+
 function backendReady() {
-  return CONFIG.GOOGLE_SCRIPT_URL && CONFIG.GOOGLE_SCRIPT_URL.indexOf("PASTE_YOUR") !== 0;
+  return true;
 }
 
-async function postAction(action, payload) {
-  var res = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+async function postAction(action, payload, opts) {
+  var res = await fetch(API_PATHS[action], {
     method: "POST",
-    body: JSON.stringify(Object.assign({ action: action }, payload)),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+    keepalive: !!(opts && opts.keepalive),
   });
   return res.json();
 }
 
 async function loadGlobalStatus() {
-  if (!backendReady()) {
-    el.statusNote.textContent = "Backend not connected yet -- see README.md.";
-    return;
-  }
   try {
-    var res = await fetch(CONFIG.GOOGLE_SCRIPT_URL + "?action=status");
+    var res = await fetch("/api/status");
     var data = await res.json();
     if (data.ok) updateGlobalStatus(data.totalWinners, data.maxWinners);
   } catch (e) {
