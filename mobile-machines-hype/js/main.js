@@ -33,7 +33,7 @@
  */
 var CONFIG = {
   xHandle: "mobilemachineOS",
-  xPostUrl: "https://x.com/mobilemachineOS/status/2095917604338631144",
+  xPostUrl: "https://x.com/mobilemachineOS/status/2096135311696732240",
   xClientId: "MVJQLVhKbWRMTkxkM3BIay1aSXk6MTpjaQ",
   xOauthRedirectUri: "https://www.mobilemachine.xyz/",
   xOauthScopes: "users.read tweet.read",
